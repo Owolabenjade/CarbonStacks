@@ -145,18 +145,22 @@
         (is-eq checkpoint-type CHECKPOINT-METHODOLOGY))
 )
 
-;; New validation helper functions
+;; Added validation helper function for checkpoint-id
+(define-private (is-valid-checkpoint-id (project-id uint) (checkpoint-id uint))
+    (is-some (map-get? project-checkpoints {project-id: project-id, checkpoint-id: checkpoint-id}))
+)
+
+;; Updated validation helper functions without the 'principal' function
 (define-private (validate-recipient (recipient principal))
-    (and 
-        (is-some (map-get? balances recipient))  ;; Check if recipient exists
-        (not (is-eq recipient (principal "SP000000000000000000000000000000000")))  ;; Not zero address
-    )
+    ;; Ensure the recipient is not the contract principal to avoid tokens being locked
+    (not (is-eq recipient (as-contract tx-sender)))
 )
 
 (define-private (validate-verifier-input (verifier principal))
+    ;; Verifier cannot be the contract owner or the contract principal
     (and
         (not (is-eq verifier contract-owner))  ;; Verifier cannot be contract owner
-        (not (is-eq verifier (principal "SP000000000000000000000000000000000")))  ;; Not zero address
+        (not (is-eq verifier (as-contract tx-sender)))  ;; Not the contract principal
     )
 )
 
@@ -475,6 +479,18 @@
     )
 )
 
+;; Updated get-checkpoint-details function with checkpoint-id validation
+(define-read-only (get-checkpoint-details 
+    (project-id uint)
+    (checkpoint-id uint))
+    (begin
+        (asserts! (is-valid-project-id project-id) err-project-not-found)
+        (asserts! (is-valid-checkpoint-id project-id checkpoint-id) err-invalid-checkpoint)  ;; Added validation
+        (ok (unwrap-panic (map-get? project-checkpoints 
+            {project-id: project-id, checkpoint-id: checkpoint-id})))
+    )
+)
+
 ;; Read-only functions
 (define-read-only (get-total-supply)
     (ok (var-get total-supply))
@@ -545,16 +561,6 @@
 
 (define-read-only (get-verifier-credentials (verifier principal))
     (map-get? verifier-credentials verifier)
-)
-
-(define-read-only (get-checkpoint-details 
-    (project-id uint)
-    (checkpoint-id uint))
-    (begin
-        (asserts! (is-valid-project-id project-id) err-project-not-found)
-        (ok (map-get? project-checkpoints 
-            {project-id: project-id, checkpoint-id: checkpoint-id}))
-    )
 )
 
 (define-read-only (get-project-verification-status (project-id uint))
